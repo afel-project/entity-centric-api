@@ -1,4 +1,4 @@
-package org.mksmart.ecapi.impl.script;
+package org.mksmart.ecapi.impl.js;
 
 import java.lang.reflect.Member;
 import java.lang.reflect.Method;

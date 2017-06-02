@@ -17,6 +17,7 @@ import static org.mksmart.ecapi.couchdb.Config.DB;
 import static org.mksmart.ecapi.couchdb.Config.SERVICE_URL;
 
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -25,7 +26,6 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.Set;
 import java.util.Vector;
@@ -40,6 +40,7 @@ import org.mksmart.ecapi.access.auth.VisibilityChecker;
 import org.mksmart.ecapi.api.AssemblyProvider;
 import org.mksmart.ecapi.api.DebuggableAssemblyProvider;
 import org.mksmart.ecapi.api.GlobalType;
+import org.mksmart.ecapi.api.MicrocompilerSet;
 import org.mksmart.ecapi.api.TypeSupport;
 import org.mksmart.ecapi.api.id.CanonicalGlobalURI;
 import org.mksmart.ecapi.api.id.GlobalURI;
@@ -47,10 +48,11 @@ import org.mksmart.ecapi.api.id.ScopedGlobalURI;
 import org.mksmart.ecapi.api.query.Query;
 import org.mksmart.ecapi.commons.couchdb.client.DocumentProvider;
 import org.mksmart.ecapi.impl.GlobalTypeImpl;
+import org.mksmart.ecapi.impl.js.JsMicrocompilerSet;
+import org.mksmart.ecapi.impl.js.ScriptUtils;
 import org.mksmart.ecapi.impl.query.QueryParser;
 import org.mksmart.ecapi.impl.query.SparqlQuery;
 import org.mksmart.ecapi.impl.query.SparqlTargetedQuery;
-import org.mksmart.ecapi.impl.script.ScriptUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -71,101 +73,17 @@ public class CouchDbAssemblyProvider implements DebuggableAssemblyProvider<Strin
 
     private String designDocId;
 
-    protected DocumentProvider<JSONObject> documentProvider;
-
     private Logger log = LoggerFactory.getLogger(getClass());
 
     private String server_url;
+
+    protected DocumentProvider<JSONObject> documentProvider;
 
     public CouchDbAssemblyProvider(Properties configuration, DocumentProvider<JSONObject> documentProvider) {
         this.server_url = configuration.getProperty(SERVICE_URL);
         this.dB = configuration.getProperty(DB);
         this.designDocId = DEFAULT_DESIGN_DOC_ID;
         this.documentProvider = documentProvider;
-    }
-
-    private void fallbackPostProcess(CanonicalGlobalURI guri, final Map<URI,List<Query>> queries) {
-        String program = null, qtpl = null, superType = null;
-        // Use the most specific localise function and query template you can find.
-
-        String st = "type/global:id/" + guri.getEntityType();
-        JSONObject stDoc = documentProvider.getDocument(st);
-        if (stDoc != null) {
-            log.debug("Falling back to global type spec <{}>", st);
-            if (stDoc.has("localise")) program = stDoc.getString("localise");
-            log.trace(" ... localisation function is '{}'", program);
-            if (stDoc.has("query_tpl")) qtpl = stDoc.getString("query_tpl");
-            log.trace(" ... query template is is '{}'", qtpl);
-            if (stDoc.has("mks:super")) superType = stDoc.getString("mks:super");
-            while ((program == null || qtpl == null) && superType != null) {
-                log.debug("Falling back to supertype spec <{}>", superType);
-                stDoc = documentProvider.getDocument(superType);
-                if (program == null && stDoc.has("localise")) {
-                    program = stDoc.getString("localise");
-                    log.trace(" ... localisation function is '{}'", program);
-                }
-                if (qtpl == null && stDoc.has("query_tpl")) {
-                    qtpl = stDoc.getString("query_tpl");
-                    log.trace(" ... query template is is '{}'", qtpl);
-                }
-                superType = (stDoc.has("mks:super")) ? stDoc.getString("mks:super") : null;
-            }
-        } else { // No dice, just use the TOP type spec
-            GlobalType gt = new GlobalTypeImpl(GlobalType.TOP_URI);
-            log.debug("Falling back to TOP type spec <{}>", gt);
-            JSONObject gtDoc = documentProvider.getDocument(gt.getId().toString());
-            if (gtDoc != null) {
-                program = gtDoc.getString("localise");
-                qtpl = gtDoc.getString("query_tpl");
-            }
-        }
-        if (program != null && qtpl != null) {
-            Object deal = ScriptUtils.runJs(
-                program,
-                "localise",
-                new Object[] {
-                              guri.getEntityType(),
-                              guri instanceof ScopedGlobalURI ? ((ScopedGlobalURI) guri).getIdentifierRealm()
-                                      : null,
-                              guri instanceof ScopedGlobalURI ? ((ScopedGlobalURI) guri)
-                                      .getIdentifyingProperty() : null, guri.getIdentifer()}, String.class);
-            log.info(" ... localised result is {}", deal);
-            if (deal == null) {
-                log.error("Null local URI. Cannot generate query.");
-            } else {
-                URI tgt = URI.create((String) deal);
-                // qtpl = gtDoc.getString("query_tpl");
-                if (!queries.containsKey(tgt)) queries.put(tgt, new LinkedList<Query>());
-                queries.get(tgt).add(QueryParser.parse(qtpl, tgt));
-            }
-        }
-    }
-
-    private Set<String> filterDatasets(JSONObject view, Set<String> datasetNames) {
-        boolean opendata = (datasetNames == null);
-        log.debug("Requested datasets : {}", datasetNames);
-        Set<String> filtered = new HashSet<>(), checkUs = new HashSet<>();
-        JSONArray rows = view.getJSONArray("rows");
-        for (int i = 0; i < rows.length(); i++) {
-            JSONObject row = rows.getJSONObject(i);
-            checkUs.add(row.getString("id"));
-        }
-        if (opendata) try {
-            log.info("Request is for all open datasets.");
-            filtered = VisibilityChecker.getInstance().filter(checkUs);
-        } catch (UnavailablePolicyTableException e) {
-            log.error("Denying all data access due to unavailable policy table.");
-            throw new RuntimeException(e);
-        }
-        else {
-            filtered.addAll(datasetNames);
-            filtered.retainAll(checkUs);
-        }
-        log.info("{} datasets filtered in out of {} requested.",
-            datasetNames == null ? "[undefined, all open data]" : filtered.size(),
-            datasetNames == null ? "[none specifically]" : datasetNames.size());
-        log.info("Using datasets : {}", Arrays.toString(filtered.toArray()));
-        return filtered;
     }
 
     @Override
@@ -193,16 +111,6 @@ public class CouchDbAssemblyProvider implements DebuggableAssemblyProvider<Strin
 
     public DocumentProvider<JSONObject> getDocumentProvider() {
         return this.documentProvider;
-    }
-
-    @Override
-    public String getMicrocompiler(String name, GlobalType type) {
-        throw new NotImplementedException("NIY");
-    }
-
-    @Override
-    public String getMicrocompiler(String name, GlobalType type, URI dataSource) {
-        throw new NotImplementedException("NIY");
     }
 
     @Override
@@ -273,6 +181,74 @@ public class CouchDbAssemblyProvider implements DebuggableAssemblyProvider<Strin
             }
         }
         return res;
+    }
+
+    @Override
+    public Map<URI,MicrocompilerSet<String>> getMicrocompilers(GlobalType type, URI... dataSources) {
+        log.debug("Getting microcompilers for type <{}> from data sources {}", type,
+            Arrays.toString(dataSources));
+        // Which data sources provide which functions (by name)
+        Map<String,Set<String>> funcMap = new HashMap<>(dataSources.length);
+        // Which functions (by code) to use for each data source
+        Map<URI,MicrocompilerSet<String>> result = new HashMap<>(dataSources.length);
+        Set<URI> dsSet = new HashSet<>(Arrays.asList(dataSources));
+        JSONObject jmap = documentProvider.getReducedView("compile", "jit", true, type.getId().toString());
+        // We obtain a JSON array indexed by dataset name.
+        JSONArray rows = jmap.getJSONArray("rows");
+        // A redundant check: since the view is reduced, we should expect a single
+        // row with one key per data source. So this outer loop should be of length 1.
+        // The whole loop is actually quadratic but reduces rapidly.
+        for (int i = 0; i < rows.length(); i++) {
+            JSONObject jFuncMap = rows.getJSONObject(i).getJSONObject("value");
+            // Now the real iteration happens
+            for (Iterator<?> it = jFuncMap.keys(); it.hasNext();) {
+                URI ds = URI.create((String) it.next());
+                if (!dsSet.contains(ds)) continue; // Skip any unwanted data sources
+                JSONObject jDsFuncs = jFuncMap.getJSONObject(ds.toString());
+                for (Iterator<?> it2 = jDsFuncs.keys(); it2.hasNext();) {
+                    String funcName = (String) it2.next();
+                    JSONObject conf = jDsFuncs.getJSONObject(funcName);
+                    if (conf.has("config")) {
+                        // The value for 'config' should be a DS name
+                        String confPointer = conf.getString("config");
+                        // A function may be inherited from a DS not on the list.
+                        if (!funcMap.containsKey(confPointer)) funcMap
+                                .put(confPointer, new HashSet<String>());
+                        funcMap.get(confPointer).add(funcName);
+                    }
+                }
+            }
+        }
+        // Now inspect the map of function names to get the actual function code.
+        jmap = documentProvider.getDocuments(funcMap.keySet().toArray(new String[0]));
+        // An array of actual DS configuration documents
+        rows = jmap.getJSONArray("rows");
+        for (int i = 0; i < rows.length(); i++) {
+            String ds = rows.getJSONObject(i).getString("id");
+            JSONObject doc = rows.getJSONObject(i).getJSONObject("doc");
+            if (doc.has("type") && "provider-spec".equals(doc.getString("type"))) {
+                if (doc.has("mks:types")) {
+                    JSONObject jTyps = doc.getJSONObject("mks:types");
+                    String typeName = type.getId().toString();
+                    if (jTyps.has(typeName) && jTyps.get(typeName) != null) {
+                        JSONObject jTyp = jTyps.getJSONObject(typeName);
+                        if (funcMap.containsKey(ds) && funcMap.get(ds) != null) for (String funcName : funcMap
+                                .get(ds)) {
+                            URI uDs = URI.create(ds);
+                            if (!result.containsKey(uDs)) result.put(uDs, new JsMicrocompilerSet());
+                            if (jTyp.has(funcName) && !result.get(uDs).hasFunction(funcName)) {
+                                log.debug("Getting microcompiler \"{}\" from configuration <{}>", funcName,
+                                    ds);
+                                result.get(uDs).setFunction(funcName, jTyp.getString(funcName));
+                            }
+                        }
+                        else log.debug("No function map was found for data source {}.", ds);
+                    }
+                } else log.warn("Data source {} is misconfigured. No 'mks:types' field was found.", ds);
+            }
+        }
+
+        return result;
     }
 
     @Override
@@ -396,7 +372,33 @@ public class CouchDbAssemblyProvider implements DebuggableAssemblyProvider<Strin
             log.debug(" ... found support in {} datasets.", rows.length());
             if (rows.length() == 0) log.debug("<== No dataset support found.");
             Set<String> allowed = filterDatasets(jds, datasetNames);
-            for (int i = 0; i < rows.length(); i++) {
+
+            GlobalType ty = new GlobalTypeImpl(ScopedGlobalURI.parse(entType));
+
+            // New code
+            long before = System.currentTimeMillis();
+            List<URI> dataSources = new ArrayList<>();
+            for (int i = 0; i < rows.length(); i++) { // Each row is a dataset
+                JSONObject row = rows.getJSONObject(i);
+                log.debug("{}: dataset <{}>", i, row.getString("id"));
+                JSONObject value = row.getJSONObject("value");
+                // Debug restrictions come first.
+                if (value.has("debug") && value.getBoolean("debug") && !debug) {
+                    log.debug(" ... is in debug state and debug mode is not set."
+                              + " Will not contribute to final data feed.");
+                    continue;
+                }
+                if (allowed != null && !allowed.contains(row.getString("id"))) {
+                    log.debug(" ... NOT allowed with supplied credentials! Skipping...");
+                    continue;
+                }
+                dataSources.add(URI.create(row.getString("id")));
+            }
+            Map<URI,MicrocompilerSet<String>> mcMap = getMicrocompilers(ty, dataSources.toArray(new URI[0]));
+            log.info("New query planning code (2 CouchDB queries) took {} ms", System.currentTimeMillis() - before);
+            log.info(" ... with functions from {} datasets", mcMap.size());
+            
+            for (int i = 0; i < rows.length(); i++) { // Each row is a dataset
                 JSONObject row = rows.getJSONObject(i);
                 log.debug("{}: dataset <{}>", i, row.getString("id"));
                 JSONObject value = row.getJSONObject("value");
@@ -411,11 +413,11 @@ public class CouchDbAssemblyProvider implements DebuggableAssemblyProvider<Strin
                     continue;
                 }
 
-                GlobalType ty = new GlobalTypeImpl(ScopedGlobalURI.parse(entType));
-                Map<String,String> jitFunctions = getMicrocompilers(ty, URI.create(row.getString("id")));
+                MicrocompilerSet<String> jitFunctions = mcMap.get(URI.create(row.getString("id")));
+                // Map<String,String> jitFunctions = getMicrocompilers(ty, URI.create(row.getString("id")));
                 log.trace("Microcompilers for {} follow:", URI.create(row.getString("id")));
-                for (Entry<String,String> entry : jitFunctions.entrySet())
-                    log.trace("{} : {}", entry.getKey(), entry.getValue());
+                for (String fN : jitFunctions.getFunctionNames())
+                    log.trace("{} : {}", fN, jitFunctions.getCode(fN));
 
                 String sep = value.getString("sep");
                 String luri = null;
@@ -428,7 +430,7 @@ public class CouchDbAssemblyProvider implements DebuggableAssemblyProvider<Strin
                 // Look for the localise function in the JIT plan first, then in the dataset document, finally
                 // in the type spec
                 String localise;
-                if (jitFunctions.containsKey("localise")) localise = jitFunctions.get("localise");
+                if (jitFunctions.hasFunction("localise")) localise = jitFunctions.getCode("localise");
                 else if (value.has("localise")) localise = value.getString("localise");
                 else localise = localiseFromType(entType);
                 if (localise == null) {
@@ -453,15 +455,14 @@ public class CouchDbAssemblyProvider implements DebuggableAssemblyProvider<Strin
                     continue;
                 }
                 Query query;
-                if (jitFunctions.containsKey("query_text")) {
-                    String query_text = jitFunctions.get("query_text");
+                if (jitFunctions.hasFunction("query_text")) {
+                    String query_text = jitFunctions.getCode("query_text");
                     // FIXME copied from below
                     query_text = query_text.replaceAll("\\[LURI\\]", luri);
                     log.debug(" ... query text: \"{}\"", query_text);
                     if (value.has("dataset")) query = new SparqlTargetedQuery(Query.Type.SPARQL_SELECT,
                             query_text, URI.create(value.getString("dataset")));
                     else query = new SparqlQuery(Query.Type.SPARQL_SELECT, query_text);
-
                 }
 
                 // the dataset spec could have a standard query template
@@ -575,6 +576,90 @@ public class CouchDbAssemblyProvider implements DebuggableAssemblyProvider<Strin
     @Override
     public Set<Set<URI>> getUnifiers(URI type) {
         throw new NotImplementedException("NIY");
+    }
+
+    private void fallbackPostProcess(CanonicalGlobalURI guri, final Map<URI,List<Query>> queries) {
+        String program = null, qtpl = null, superType = null;
+        // Use the most specific localise function and query template you can find.
+
+        String st = "type/global:id/" + guri.getEntityType();
+        JSONObject stDoc = documentProvider.getDocument(st);
+        if (stDoc != null) {
+            log.debug("Falling back to global type spec <{}>", st);
+            if (stDoc.has("localise")) program = stDoc.getString("localise");
+            log.trace(" ... localisation function is '{}'", program);
+            if (stDoc.has("query_tpl")) qtpl = stDoc.getString("query_tpl");
+            log.trace(" ... query template is is '{}'", qtpl);
+            if (stDoc.has("mks:super")) superType = stDoc.getString("mks:super");
+            while ((program == null || qtpl == null) && superType != null) {
+                log.debug("Falling back to supertype spec <{}>", superType);
+                stDoc = documentProvider.getDocument(superType);
+                if (program == null && stDoc.has("localise")) {
+                    program = stDoc.getString("localise");
+                    log.trace(" ... localisation function is '{}'", program);
+                }
+                if (qtpl == null && stDoc.has("query_tpl")) {
+                    qtpl = stDoc.getString("query_tpl");
+                    log.trace(" ... query template is is '{}'", qtpl);
+                }
+                superType = (stDoc.has("mks:super")) ? stDoc.getString("mks:super") : null;
+            }
+        } else { // No dice, just use the TOP type spec
+            GlobalType gt = new GlobalTypeImpl(GlobalType.TOP_URI);
+            log.debug("Falling back to TOP type spec <{}>", gt);
+            JSONObject gtDoc = documentProvider.getDocument(gt.getId().toString());
+            if (gtDoc != null) {
+                program = gtDoc.getString("localise");
+                qtpl = gtDoc.getString("query_tpl");
+            }
+        }
+        if (program != null && qtpl != null) {
+            Object deal = ScriptUtils.runJs(
+                program,
+                "localise",
+                new Object[] {
+                              guri.getEntityType(),
+                              guri instanceof ScopedGlobalURI ? ((ScopedGlobalURI) guri).getIdentifierRealm()
+                                      : null,
+                              guri instanceof ScopedGlobalURI ? ((ScopedGlobalURI) guri)
+                                      .getIdentifyingProperty() : null, guri.getIdentifer()}, String.class);
+            log.info(" ... localised result is {}", deal);
+            if (deal == null) {
+                log.error("Null local URI. Cannot generate query.");
+            } else {
+                URI tgt = URI.create((String) deal);
+                // qtpl = gtDoc.getString("query_tpl");
+                if (!queries.containsKey(tgt)) queries.put(tgt, new LinkedList<Query>());
+                queries.get(tgt).add(QueryParser.parse(qtpl, tgt));
+            }
+        }
+    }
+
+    private Set<String> filterDatasets(JSONObject view, Set<String> datasetNames) {
+        boolean opendata = (datasetNames == null);
+        log.debug("Requested datasets : {}", datasetNames);
+        Set<String> filtered = new HashSet<>(), checkUs = new HashSet<>();
+        JSONArray rows = view.getJSONArray("rows");
+        for (int i = 0; i < rows.length(); i++) {
+            JSONObject row = rows.getJSONObject(i);
+            checkUs.add(row.getString("id"));
+        }
+        if (opendata) try {
+            log.info("Request is for all open datasets.");
+            filtered = VisibilityChecker.getInstance().filter(checkUs);
+        } catch (UnavailablePolicyTableException e) {
+            log.error("Denying all data access due to unavailable policy table.");
+            throw new RuntimeException(e);
+        }
+        else {
+            filtered.addAll(datasetNames);
+            filtered.retainAll(checkUs);
+        }
+        log.info("{} datasets filtered in out of {} requested.",
+            datasetNames == null ? "[undefined, all open data]" : filtered.size(),
+            datasetNames == null ? "[none specifically]" : datasetNames.size());
+        log.info("Using datasets : {}", Arrays.toString(filtered.toArray()));
+        return filtered;
     }
 
     private String localiseFromType(String type) {

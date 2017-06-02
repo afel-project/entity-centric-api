@@ -204,7 +204,7 @@ public class EntityResource extends BaseResource {
 
     @GET
     @Path("{type}")
-    @Produces(value = {MediaType.APPLICATION_JSON})
+    @Produces(value = {MediaType.APPLICATION_JSON, MediaType.WILDCARD})
     public Response getTypeInfo(@PathParam("type") String typename,
                                 @DefaultValue("false") @QueryParam("debug") boolean debug,
                                 @Context HttpHeaders headers,
@@ -224,7 +224,7 @@ public class EntityResource extends BaseResource {
             aliases.put(ut);
         sol.put("short_name", typename);
         sol.put("aliases", aliases);
-        sol.put("datasets", makeSupportJSON(typename, compiler, uriInfo.getRequestUri(), debug));
+        sol.put("datasets", makeTypeManifestJSON(typename, compiler, uriInfo.getRequestUri(), debug));
 
         JSONArray insts = new JSONArray();
         @SuppressWarnings("rawtypes")
@@ -257,7 +257,7 @@ public class EntityResource extends BaseResource {
         StringBuilder widget = new StringBuilder();
         widget.append("<h3>Stub for the HTML view of type information</h3>");
 
-        JSONObject support = makeSupportJSON(typename, ec, uriInfo.getRequestUri(), debug);
+        JSONObject support = makeTypeManifestJSON(typename, ec, uriInfo.getRequestUri(), debug);
         for (Iterator<?> it = support.keys(); it.hasNext();) {
             widget.append("<div>");
             String ds = it.next().toString();
@@ -293,52 +293,6 @@ public class EntityResource extends BaseResource {
         rb = Response.ok(widget.toString());
         handleCors(rb);
         return rb.build();
-    }
-
-    protected void init(UriInfo uriInfo, HttpHeaders headers) {
-        log.trace("Request URI was {}", uriInfo.getRequestUri());
-        log.trace("Base URI was {}", uriInfo.getBaseUri());
-        log.trace("HTTP Headers follow");
-        for (Entry<String,List<String>> head : headers.getRequestHeaders().entrySet()) {
-            log.trace("{} : ", head.getKey());
-            for (String hv : head.getValue())
-                log.trace(" - {}", hv);
-        }
-        @SuppressWarnings("rawtypes")
-        IdGenerator ig = (IdGenerator) servletContext.getAttribute(IdGenerator.class.getName());
-        ig.refresh();
-    }
-
-    /**
-     * Returns a JSON manifest of an entity type.
-     * 
-     * @param typeShortName
-     * @param compiler
-     * @param requestURI
-     * @return
-     */
-    protected JSONObject makeSupportJSON(String typeShortName,
-                                         DebuggableEntityCompiler compiler,
-                                         URI requestURI,
-                                         boolean debug) {
-        JSONObject dsSupport = new JSONObject();
-        GlobalType ty = new GlobalTypeImpl(ScopedGlobalURI.parse("type/global:id/" + typeShortName));
-        String base = requestURI.toString();
-        while (base.endsWith("/"))
-            base = base.substring(0, base.length() - 1);
-        base = base.substring(0, base.lastIndexOf('/'));
-        TypeSupport ts = compiler.getTypeSupport(ty, debug);
-        for (URI datasetId : ts.getDatasets()) {
-            JSONObject dso = new JSONObject();
-            JSONArray instances = new JSONArray();
-            for (GlobalURI inst : ts.getExampleInstances(datasetId))
-                instances.put(base + '/' + inst.toString());
-            if (instances.length() > 0) {
-                dso.put("example_instances", instances);
-                dsSupport.put(datasetId.toString(), dso);
-            }
-        }
-        return dsSupport;
     }
 
     @OPTIONS
@@ -377,6 +331,52 @@ public class EntityResource extends BaseResource {
         ResponseBuilder rb = Response.ok();
         handleCors(rb);
         return rb.build();
+    }
+
+    protected void init(UriInfo uriInfo, HttpHeaders headers) {
+        log.trace("Request URI was {}", uriInfo.getRequestUri());
+        log.trace("Base URI was {}", uriInfo.getBaseUri());
+        log.trace("HTTP Headers follow");
+        for (Entry<String,List<String>> head : headers.getRequestHeaders().entrySet()) {
+            log.trace("{} : ", head.getKey());
+            for (String hv : head.getValue())
+                log.trace(" - {}", hv);
+        }
+        @SuppressWarnings("rawtypes")
+        IdGenerator ig = (IdGenerator) servletContext.getAttribute(IdGenerator.class.getName());
+        ig.refresh();
+    }
+
+    /**
+     * Returns a JSON manifest of an entity type.
+     * 
+     * @param typeShortName
+     * @param compiler
+     * @param requestURI
+     * @return
+     */
+    protected JSONObject makeTypeManifestJSON(String typeShortName,
+                                              DebuggableEntityCompiler compiler,
+                                              URI requestURI,
+                                              boolean debug) {
+        JSONObject dsSupport = new JSONObject();
+        GlobalType ty = new GlobalTypeImpl(ScopedGlobalURI.parse("type/global:id/" + typeShortName));
+        String base = requestURI.toString();
+        while (base.endsWith("/"))
+            base = base.substring(0, base.length() - 1);
+        base = base.substring(0, base.lastIndexOf('/'));
+        TypeSupport ts = compiler.getTypeSupport(ty, debug);
+        for (URI datasetId : ts.getDatasets()) {
+            JSONObject dso = new JSONObject();
+            JSONArray instances = new JSONArray();
+            for (GlobalURI inst : ts.getExampleInstances(datasetId))
+                instances.put(base + '/' + inst.toString());
+            if (instances.length() > 0) {
+                dso.put("example_instances", instances);
+                dsSupport.put(datasetId.toString(), dso);
+            }
+        }
+        return dsSupport;
     }
 
     protected GlobalURI preprocessGlobalId(String id) {

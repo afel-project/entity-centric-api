@@ -1,4 +1,4 @@
-package org.mksmart.ecapi.impl.script;
+package org.mksmart.ecapi.impl.js;
 
 import org.mozilla.javascript.Context;
 import org.mozilla.javascript.Function;

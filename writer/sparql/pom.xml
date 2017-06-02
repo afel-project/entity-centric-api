@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             http://maven.apache.org/maven-v4_0_0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<groupId>eu.afel-project</groupId>
+	<artifactId>ecapi.writer.sparql</artifactId>
+	<packaging>jar</packaging>
+	<version>${datahub-version}</version>
+	<name>Entity-Centric API : SPARQL writer</name>
+	<description>Library for writing data to a SPARQL endpoint, with implementations for SPARQL over HTTP (both Graph Store and Update protocols).</description>
+	<inceptionYear>2017</inceptionYear>
+
+	<parent>
+		<groupId>org.mksmart</groupId>
+		<artifactId>ecapi-parent</artifactId>
+		<version>1</version>
+		<relativePath>../..</relativePath>
+	</parent>
+
+	<build>
+	</build>
+
+	<dependencies>
+	</dependencies>
+
+</project>

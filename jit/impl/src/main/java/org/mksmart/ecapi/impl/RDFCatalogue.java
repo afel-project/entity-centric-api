@@ -13,6 +13,7 @@ import org.apache.commons.lang3.NotImplementedException;
 import org.mksmart.ecapi.api.Catalogue;
 import org.mksmart.ecapi.api.DebuggableAssemblyProvider;
 import org.mksmart.ecapi.api.GlobalType;
+import org.mksmart.ecapi.api.MicrocompilerSet;
 import org.mksmart.ecapi.api.TypeSupport;
 import org.mksmart.ecapi.api.id.GlobalURI;
 import org.mksmart.ecapi.api.query.Query;
@@ -120,22 +121,17 @@ public class RDFCatalogue extends HashMap<URI,Set<URI>> implements Catalogue,
     }
 
     @Override
-    public String getMicrocompiler(String name, GlobalType type) {
-        throw new NotImplementedException("NIY - this class is a highly experimental implementation");
-    }
-
-    @Override
-    public String getMicrocompiler(String name, GlobalType type, URI dataSource) {
-        throw new NotImplementedException("NIY - this class is a highly experimental implementation");
-    }
-
-    @Override
     public String getMicrocompiler(URI type) {
         return microcompilers.get(type);
     }
 
     @Override
     public Map<String,String> getMicrocompilers(GlobalType type, URI dataSource) {
+        throw new NotImplementedException("NIY - this class is a highly experimental implementation");
+    }
+
+    @Override
+    public Map<URI,MicrocompilerSet<String>> getMicrocompilers(GlobalType type, URI... dataSources) {
         throw new NotImplementedException("NIY - this class is a highly experimental implementation");
     }
 

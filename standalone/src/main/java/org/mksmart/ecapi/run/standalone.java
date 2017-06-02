@@ -21,6 +21,7 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.commons.cli.UnrecognizedOptionException;
+import org.apache.http.auth.Credentials;
 import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.wink.client.ClientAuthenticationException;
 import org.eclipse.jetty.server.Connector;
@@ -56,6 +57,8 @@ import org.mksmart.ecapi.web.util.SPARQLWriter;
 import org.mksmart.ecapi.web.util.SparqlHttpWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import eu.afelproject.ecapi.writer.couchdb.NtAsJsonLdStore;
 
 /**
  * Launcher class for standalone packaging.
@@ -347,6 +350,8 @@ public class standalone {
         ApiKeyDriver driver = selectDriver(pro);
         log.debug("Instantiated permission checker of type {}", driver.getClass());
         sctx.setAttribute(ApiKeyDriver.class.getName(), driver);
+
+        // Instantiate data stores
         if (pro.containsKey("org.mksmart.web.util.sparql.writer")) {
             String clazzName = SPARQLWriter.class.getName();
             String sup = pro.getProperty("org.mksmart.web.util.sparql.writer");
@@ -354,6 +359,25 @@ public class standalone {
                 String sda = pro.getProperty("org.mksmart.web.util.sparql.data");
                 sctx.setAttribute(clazzName, new SparqlHttpWriter(sup, sda));
             } else sctx.setAttribute(clazzName, new SPARQLWriter(sup));
+        }
+        if (lc.has(org.mksmart.ecapi.run.Config.STORE_COUCHDB_SERVICE_URL)
+            && lc.has(org.mksmart.ecapi.run.Config.STORE_COUCHDB_DB)) {
+            log.info("Attempting to initialise CouchDB data store");
+            log.info(" - service : {}", lc.get(org.mksmart.ecapi.run.Config.STORE_COUCHDB_SERVICE_URL));
+            log.info(" - dataset : {}", lc.get(org.mksmart.ecapi.run.Config.STORE_COUCHDB_DB));
+            Credentials cred = null;
+            if (lc.has(org.mksmart.ecapi.run.Config.STORE_COUCHDB_USER)) cred = new UsernamePasswordCredentials(
+                    (String) lc.get(org.mksmart.ecapi.run.Config.STORE_COUCHDB_USER),
+                    (String) lc.get(org.mksmart.ecapi.run.Config.STORE_COUCHDB_PASSWORD));
+
+            Store<?,?> dataStore;
+            if (cred == null) dataStore = new NtAsJsonLdStore(
+                    (String) lc.get(org.mksmart.ecapi.run.Config.STORE_COUCHDB_SERVICE_URL),
+                    (String) lc.get(org.mksmart.ecapi.run.Config.STORE_COUCHDB_DB));
+            else dataStore = new NtAsJsonLdStore(
+                    (String) lc.get(org.mksmart.ecapi.run.Config.STORE_COUCHDB_SERVICE_URL),
+                    (String) lc.get(org.mksmart.ecapi.run.Config.STORE_COUCHDB_DB), cred);
+            sctx.setAttribute("datastores", dataStore);
         }
 
     }

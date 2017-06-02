@@ -4,6 +4,7 @@ import static javax.ws.rs.core.Response.Status.BAD_REQUEST;
 import static javax.ws.rs.core.Response.Status.FORBIDDEN;
 import static javax.ws.rs.core.Response.Status.NOT_FOUND;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -30,6 +31,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.mksmart.ecapi.access.ApiKeyDriver;
 import org.mksmart.ecapi.api.id.IdGenerator;
+import org.mksmart.ecapi.api.storage.Store;
 import org.mksmart.ecapi.web.JsonMessageFactory;
 import org.mksmart.ecapi.web.util.SPARQLWriter;
 import org.slf4j.Logger;
@@ -80,7 +82,7 @@ public class DatasetResource extends BaseResource {
                             @QueryParam("key") String oldKey,
                             @Context HttpHeaders headers,
                             @Context HttpServletRequest request) {
-        log.info("GET /dataset/{}", uuid);
+        log.debug("GET /dataset/{}", uuid);
         ResponseBuilder rb;
         key = selectKey(key, oldKey);
         SPARQLWriter writer = (SPARQLWriter) servletContext.getAttribute(SPARQLWriter.class.getName());
@@ -189,8 +191,8 @@ public class DatasetResource extends BaseResource {
                           @FormParam("rdf") String rdf,
                           @Context HttpHeaders headers,
                           @Context HttpServletRequest request) {
-        log.info("POST /dataset/{}", uuid);
-        ResponseBuilder rb;
+        log.debug("POST /dataset/{}", uuid);
+        ResponseBuilder rb = null;
         key = selectKey(key, oldKey);
         if (key == null || !writeAuthorised(key, uuid, headers, request)) {
             rb = Response.status(FORBIDDEN);
@@ -213,14 +215,32 @@ public class DatasetResource extends BaseResource {
                 .entity(
                     JsonMessageFactory
                             .badRequest("Form param 'data' is required, and you do not seem to have used the deprecated 'rdf' parameter."));
+        // FIXME deprecate these writers
         SPARQLWriter writer = (SPARQLWriter) servletContext.getAttribute(SPARQLWriter.class.getName());
-        int code = writer.write(data, getGraphId(uuid));
-        if (code < 200 || code >= 400) rb = Response.status(code).entity(
-            JsonMessageFactory.response(code, "Writer returned erroneous HTTP code " + code));
-        else {
-            JSONObject o = new JSONObject().put("status:", "written to " + uuid);
-            rb = Response.ok((JSONObject) o);
+        if (writer != null) {
+            int code = writer.write(data, getGraphId(uuid));
+            if (code < 200 || code >= 400) rb = Response.status(code).entity(
+                JsonMessageFactory.response(code, "Writer returned erroneous HTTP code " + code));
+            else {
+                JSONObject o = new JSONObject().put("status:", "written to " + uuid);
+                rb = Response.ok((JSONObject) o);
+            }
         }
+        if (!getWriters().isEmpty()) {
+            log.trace("Found {} writers", getWriters().size());
+            int ct = 0;
+            for (Store store : getWriters()) {
+                log.trace("Writer {} : {}", ct++, store.getClass());
+                store.store(data);
+            }
+            if (rb == null) {
+                JSONObject o = new JSONObject().put("status:", "written to " + uuid);
+                rb = Response.ok((JSONObject) o);
+            }
+        }
+        if (rb == null) rb = Response.status(405).entity(
+            JsonMessageFactory.response(405,
+                "No registered writers found. This API does not seem to be configured for receiving data."));
         handleCors(rb, "GET", "POST", "PUT");
         return rb.build();
     }
@@ -230,6 +250,13 @@ public class DatasetResource extends BaseResource {
                 "UUID must be neither null nor empty");
         // FIXME THIS MUST NOT BE HARDCODED !!!!!!!!!!!!!!!!!!!!
         return "urn:dataset:" + uuid + ":graph";
+    }
+
+    protected Set<Store<?,?>> getWriters() {
+        Set<Store<?,?>> stores = new HashSet<>();
+        Store<?,?> store = (Store) servletContext.getAttribute("datastores");
+        if (store != null) stores.add(store);
+        return stores;
     }
 
     protected void init(UriInfo uriInfo, HttpHeaders headers) {

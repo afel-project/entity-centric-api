@@ -91,6 +91,7 @@ public class RemoteDocumentProvider extends RemoteDocumentHandlerBase implements
 
     @Override
     public JSONObject getResource(String url, String... keys) {
+        log.debug("Requesting resource {}", url);
         Resource resource = this.client.resource(url);
         if (keys != null && keys.length > 0) resource.queryParam("keys", new JSONArray(keys));
         // TODO reimplement using Jackson/Ektorp

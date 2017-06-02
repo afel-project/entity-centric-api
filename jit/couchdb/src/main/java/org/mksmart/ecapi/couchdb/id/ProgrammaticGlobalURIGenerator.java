@@ -18,7 +18,7 @@ import org.mksmart.ecapi.api.id.IdGenerator;
 import org.mksmart.ecapi.api.id.ScopedGlobalURI;
 import org.mksmart.ecapi.commons.couchdb.client.DocumentProvider;
 import org.mksmart.ecapi.impl.GlobalTypeImpl;
-import org.mksmart.ecapi.impl.script.ScriptUtils;
+import org.mksmart.ecapi.impl.js.ScriptUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

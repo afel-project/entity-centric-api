@@ -42,10 +42,6 @@ public interface AssemblyProvider<F> extends SupportRetriever {
     @Deprecated
     public Set<URI> getCandidateTypes(URI property);
 
-    public F getMicrocompiler(String name, GlobalType type);
-
-    public F getMicrocompiler(String name, GlobalType type, URI dataSource);
-
     /**
      * Gets a raw representation of the compiler code used for obtaining data on an entity with a certain
      * type. This is not executed by the provider itself, but can be run by an {@link EntityCompiler}.
@@ -58,7 +54,21 @@ public interface AssemblyProvider<F> extends SupportRetriever {
 
     /**
      * For a given type, returns all the microcompiler functions that should be used to JIT query execution on
+     * each of the requested data sources.
+     * 
+     * @param type
+     *            the global type of the entity
+     * @param dataSources
+     *            the URIs of the data sources.
+     * @return a map of data source names to microcompiler functions.
+     */
+    public Map<URI,MicrocompilerSet<F>> getMicrocompilers(GlobalType type, URI... dataSources);
+
+    /**
+     * For a given type, returns all the microcompiler functions that should be used to JIT query execution on
      * a data source.
+     * 
+     * @deprecated use {@link AssemblyProvider#getMicrocompilers(GlobalType, URI[])} instead.
      * 
      * @param type
      * @param dataSource

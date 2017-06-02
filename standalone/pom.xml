@@ -109,6 +109,17 @@
 			<artifactId>ecapi.web</artifactId>
 			<version>${datahub-version}</version>
 		</dependency>
+		
+		<dependency>
+			<groupId>eu.afel-project</groupId>
+			<artifactId>ecapi.writer.couchdb</artifactId>
+			<version>${datahub-version}</version>
+		</dependency>
+		<dependency>
+			<groupId>eu.afel-project</groupId>
+			<artifactId>ecapi.writer.sparql</artifactId>
+			<version>${datahub-version}</version>
+		</dependency>
 
 		<!-- Embedded server -->
 		<dependency>

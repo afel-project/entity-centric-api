@@ -159,39 +159,8 @@ public class EntityCompilerImpl implements DebuggableEntityCompiler {
             filtered.get(entry.getKey()).removeAll(hits);
             log.debug(" .. after = {}", entry.getValue().size());
         }
-        // Get the data from the cache hits
+        // Obtain and integrate the actual cached data
         getDataFromCacheHitsBulk(hits, ecached);
-        // for (TargetedQuery tq : hits) {
-        // Object o = null;
-        // for (Iterator<Store<?,?>> it = stores.iterator(); it.hasNext() && o == null;) {
-        // Store<?,?> st = it.next();
-        // if (st.getSupportedKeyType() == TargetedQuery.class) {
-        // try {
-        // o = ((Store<TargetedQuery,?>) st).retrieve(tq);
-        // } catch (Exception ex) {
-        // log.error("Retrieval failed.", ex);
-        // }
-        // if (o != null) {
-        // log.trace("Cache hit.");
-        // log.trace(" ... is a {}", o.getClass().getCanonicalName());
-        // if (!(o instanceof EntityFragment)) throw new IllegalStateException(
-        // "Unexpected type " + o.getClass().getCanonicalName()
-        // + " for an entity fragment. Supported types are "
-        // + EntityFragment.class.getCanonicalName() + " and "
-        // + Entity.class.getCanonicalName());
-        // EntityFragment ef = (EntityFragment) o;
-        // long before = System.currentTimeMillis();
-        // reconstructProvenance(ef, ef, tq.getTarget().toString(), new PropertyPath(),
-        // new HashSet<EntityFragment>());
-        // log.debug("Provenance computation overhead = {} ms", System.currentTimeMillis()
-        // - before);
-        // if (ef instanceof Entity) Util.merge((Entity) ef, ecached);
-        // else Util.merge(ef, ecached);
-        // } else log.trace("Cache miss.");
-        // }
-        // }
-        //
-        // }
 
         // Query execution
         SingletonQuerier querier = SingletonQuerier.getInstance();

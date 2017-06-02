@@ -32,6 +32,7 @@ public class SparqlHttpWriter extends SPARQLWriter {
 
     @Override
     public int write(String NT, String graph) {
+        // Executes the equivalent of the following cURL 
         // curl -X PUT -H "Content-type:text/plain" -T alex.nt
         // -G http://localhost:3030/afel/data --data-urlencode
         // graph=http://diocane.org/pippobaudo
