@@ -58,7 +58,7 @@ import org.mksmart.ecapi.web.util.SparqlHttpWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import eu.afelproject.ecapi.writer.couchdb.NtAsJsonLdStore;
+import eu.afelproject.ecapi.writer.json.SimpleJSONStore;
 
 /**
  * Launcher class for standalone packaging.
@@ -370,15 +370,35 @@ public class standalone {
                     (String) lc.get(org.mksmart.ecapi.run.Config.STORE_COUCHDB_USER),
                     (String) lc.get(org.mksmart.ecapi.run.Config.STORE_COUCHDB_PASSWORD));
 
-            Store<?,?> dataStore;
-            if (cred == null) dataStore = new NtAsJsonLdStore(
-                    (String) lc.get(org.mksmart.ecapi.run.Config.STORE_COUCHDB_SERVICE_URL),
-                    (String) lc.get(org.mksmart.ecapi.run.Config.STORE_COUCHDB_DB));
-            else dataStore = new NtAsJsonLdStore(
-                    (String) lc.get(org.mksmart.ecapi.run.Config.STORE_COUCHDB_SERVICE_URL),
-                    (String) lc.get(org.mksmart.ecapi.run.Config.STORE_COUCHDB_DB), cred);
-            sctx.setAttribute("datastores", dataStore);
+            // Store<?,?> dataStore;
+            // if (cred == null) dataStore = new NtAsJsonLdStore(
+            // (String) lc.get(org.mksmart.ecapi.run.Config.STORE_COUCHDB_SERVICE_URL),
+            // (String) lc.get(org.mksmart.ecapi.run.Config.STORE_COUCHDB_DB));
+            // else dataStore = new NtAsJsonLdStore(
+            // (String) lc.get(org.mksmart.ecapi.run.Config.STORE_COUCHDB_SERVICE_URL),
+            // (String) lc.get(org.mksmart.ecapi.run.Config.STORE_COUCHDB_DB), cred);
+            // sctx.setAttribute("datastores", dataStore);
+
         }
+        
+        if (lc.has(org.mksmart.ecapi.run.Config.STORE_JSON_SERVICE_URL)
+                && lc.has(org.mksmart.ecapi.run.Config.STORE_JSON_DB)) {
+                log.info("Attempting to initialise JSON data store");
+                log.info(" - service : {}", lc.get(org.mksmart.ecapi.run.Config.STORE_JSON_SERVICE_URL));
+                log.info(" - dataset : {}", lc.get(org.mksmart.ecapi.run.Config.STORE_JSON_DB));
+                Credentials cred = null;
+                if (lc.has(org.mksmart.ecapi.run.Config.STORE_JSON_USER)) cred = new UsernamePasswordCredentials(
+                        (String) lc.get(org.mksmart.ecapi.run.Config.STORE_JSON_USER),
+                        (String) lc.get(org.mksmart.ecapi.run.Config.STORE_JSON_PASSWORD));
+                Store<?,?> dataStore;
+                if (cred == null) dataStore = new SimpleJSONStore(
+                        (String) lc.get(org.mksmart.ecapi.run.Config.STORE_JSON_SERVICE_URL),
+                        (String) lc.get(org.mksmart.ecapi.run.Config.STORE_JSON_DB));
+                else dataStore = new SimpleJSONStore(
+                        (String) lc.get(org.mksmart.ecapi.run.Config.STORE_JSON_SERVICE_URL),
+                        (String) lc.get(org.mksmart.ecapi.run.Config.STORE_JSON_DB), cred);
+                sctx.setAttribute("datastores", dataStore);
+            }
 
     }
 
